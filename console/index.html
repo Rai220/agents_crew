@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14161a">
+<title>crew console</title>
+<!-- Фавикон внутри страницы: без отдельного файла, роута и лишнего запроса.
+     Реплика с тремя точками — разговор с несколькими сотрудниками. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23161920'/%3E%3Crect x='5' y='6' width='22' height='15' rx='5' fill='%237aa2f7'/%3E%3Cpath d='M9.5 20h7L9.5 26.5z' fill='%237aa2f7'/%3E%3Ccircle cx='11' cy='13.5' r='1.9' fill='%23161920'/%3E%3Ccircle cx='16' cy='13.5' r='1.9' fill='%23161920'/%3E%3Ccircle cx='21' cy='13.5' r='1.9' fill='%23161920'/%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1a1d23; --line: #272b33;
+    --fg: #d8dbe0; --dim: #7f8794; --accent: #7aa2f7;
+    --user: #223047; --ok: #86c98a; --err: #e06c75;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100dvh; display: flex; background: var(--bg); color: var(--fg);
+    font: 14px/1.55 -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+  }
+
+  /* ── боковая панель ────────────────────────────────── */
+  aside {
+    width: 216px; flex: none; background: var(--panel);
+    border-right: 1px solid var(--line); display: flex; flex-direction: column;
+  }
+  aside h1 {
+    margin: 0; padding: 16px 16px 12px; font-size: 12px; font-weight: 600;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--dim);
+  }
+  .agent {
+    padding: 9px 14px; cursor: pointer; border-left: 2px solid transparent;
+    display: flex; gap: 10px; align-items: center;
+  }
+  .agent:hover { background: #1f232a; }
+  .agent.on { background: #20252e; border-left-color: var(--accent); }
+  .agent .nm { font-weight: 600; }
+  .agent .rl { display: block; font-size: 11px; color: var(--dim); margin-top: 1px; }
+
+  /* Аватар со статусной точкой-бейджем в углу */
+  .avwrap { position: relative; flex: none; line-height: 0; }
+  .av { width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
+        background: #2a2f38; }
+  .avwrap .dot {
+    position: absolute; right: -1px; bottom: -1px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #4a5160; border: 2px solid var(--panel);
+  }
+  .avwrap .dot.run { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  aside .foot { margin-top: auto; padding: 12px 16px; font-size: 11px; color: var(--dim);
+                border-top: 1px solid var(--line); }
+
+  /* ── основная колонка ──────────────────────────────── */
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  header {
+    padding: 12px 20px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 12px;
+  }
+  header .who { font-weight: 600; }
+  header .sub { font-size: 12px; color: var(--dim); }
+  header .sp { margin-left: auto; }
+  button {
+    background: #222731; color: var(--fg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: #2b313d; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.danger { color: var(--err); }
+  /* Второй шаг подтверждения прямо в кнопке — без модалки */
+  button.arm { border-color: var(--err); color: var(--err); background: #2a1e21; }
+  .ctx { font-size: 11.5px; color: var(--dim); margin-right: 2px; white-space: nowrap; }
+
+  #feed { flex: 1; overflow-y: auto; padding: 20px; }
+  .turn { margin-bottom: 22px; max-width: 780px; }
+  .turn.me { margin-left: auto; }
+  .me .body {
+    background: var(--user); padding: 9px 13px; border-radius: 12px 12px 3px 12px;
+    white-space: pre-wrap; word-wrap: break-word;
+  }
+  .who-line { font-size: 11px; color: var(--dim); margin-bottom: 6px;
+              letter-spacing: .04em; text-transform: uppercase;
+              display: flex; align-items: center; gap: 7px; }
+  .who-line .av { width: 22px; height: 22px; }
+  .me .who-line { justify-content: flex-end; }
+  .body { word-wrap: break-word; overflow-wrap: anywhere; }
+  .body > :first-child { margin-top: 0; }
+  .body > :last-child { margin-bottom: 0; }
+  .body pre {
+    background: #101216; padding: 11px 13px; border-radius: 8px; overflow-x: auto;
+    border: 1px solid var(--line);
+  }
+  .body code { font-family: "SF Mono", ui-monospace, monospace; font-size: 12.5px; }
+  .body :not(pre) > code { background: #101216; padding: 1px 5px; border-radius: 4px; }
+  .body table { border-collapse: collapse; }
+  .body td, .body th { border: 1px solid var(--line); padding: 4px 9px; }
+
+  /* ── серия вызовов инструментов ────────────────────── */
+  .toolbox { margin: 3px 0 5px; }
+  .tlist { line-height: 1.62; }
+  /* Свёрнуто показываем хвост: ровно три строки, которые бегут за агентом.
+     Скроллбар прячем — это индикатор, а не область для прокрутки руками. */
+  .tlist.fold { max-height: 5.9em; overflow-y: auto; scrollbar-width: none; }
+  .tlist.fold::-webkit-scrollbar { display: none; }
+  .tmore {
+    font-size: 11.5px; color: var(--dim); cursor: pointer; user-select: none;
+    padding: 1px 0; display: inline-block;
+  }
+  .tmore:hover { color: var(--fg); }
+
+  .tool {
+    font-family: "SF Mono", ui-monospace, monospace; font-size: 12px;
+    color: var(--dim); padding: 2px 0; display: flex; gap: 7px;
+  }
+  .tool b { color: #9aa4b5; font-weight: 600; }
+  .tool i { font-style: normal; opacity: .72; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap; }
+  /* ── обращение к соседу ────────────────────────────── */
+  .consult {
+    border: 1px solid var(--line); border-left: 2px solid #5b6ea8;
+    background: #171b21; border-radius: 8px; padding: 10px 12px; margin: 9px 0;
+  }
+  .chead { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .chead .av { width: 20px; height: 20px; }
+  .chead b { font-size: 12.5px; }
+  .chead .tag {
+    font-size: 10.5px; color: var(--dim); text-transform: uppercase;
+    letter-spacing: .07em; margin-left: auto;
+  }
+  .clabel {
+    font-size: 10.5px; color: var(--dim); text-transform: uppercase;
+    letter-spacing: .07em; margin-bottom: 3px;
+  }
+  .cq {
+    font-size: 12.5px; color: #b6bdc9; white-space: pre-wrap;
+    border-left: 2px solid var(--line); padding-left: 9px; margin-bottom: 9px;
+  }
+  .cq.mono { font-family: "SF Mono", ui-monospace, monospace; font-size: 11.5px; }
+  .ca { font-size: 13px; position: relative; }
+  .ca.folded {
+    max-height: 4.2em; overflow: hidden;
+    -webkit-mask-image: linear-gradient(#000 45%, transparent);
+            mask-image: linear-gradient(#000 45%, transparent);
+  }
+  .ca > :first-child { margin-top: 0; }
+  .ctoggle {
+    font-size: 11.5px; padding: 3px 9px; margin-top: 6px; border-radius: 5px;
+  }
+  .cwait { font-size: 12px; color: var(--dim); }
+  .cwait::after { content: "▌"; color: var(--accent); animation: blink 1.1s steps(2) infinite; }
+
+  .meta { font-size: 11.5px; color: var(--dim); margin-top: 7px; }
+  .err { color: var(--err); white-space: pre-wrap; font-family: "SF Mono", monospace;
+         font-size: 12px; border-left: 2px solid var(--err); padding-left: 10px; }
+  .cursor::after {
+    content: "▌"; color: var(--accent); animation: blink 1.1s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .empty { color: var(--dim); text-align: center; margin-top: 22vh; line-height: 1.9; }
+
+  /* ── поле ввода ────────────────────────────────────── */
+  footer { border-top: 1px solid var(--line); padding: 10px 20px 16px; }
+
+  /* ── тумблеры проектов ─────────────────────────────── */
+  .projects {
+    display: flex; flex-wrap: wrap; gap: 6px; max-width: 820px; margin-bottom: 9px;
+  }
+  .proj {
+    font-size: 11.5px; padding: 3px 10px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: transparent; color: var(--dim);
+    font-family: "SF Mono", ui-monospace, monospace; user-select: none;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .proj:hover { color: var(--fg); border-color: #39414f; }
+  .proj.on { background: #23304a; border-color: #47598a; color: #cfe0ff; }
+  .projects .clear {
+    font-size: 11.5px; color: var(--dim); cursor: pointer; padding: 3px 4px;
+    align-self: center; border: none; background: none;
+  }
+  .projects .clear:hover { color: var(--fg); }
+
+  /* Отметки проектов под репликой человека */
+  .ptags { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+  .ptag {
+    font-size: 10.5px; font-family: "SF Mono", ui-monospace, monospace;
+    color: var(--dim); border: 1px solid var(--line); border-radius: 999px;
+    padding: 1px 7px;
+  }
+  .composer { display: flex; gap: 10px; align-items: flex-end; max-width: 820px; }
+  textarea {
+    flex: 1; background: var(--panel); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 9px; padding: 10px 13px; font: inherit; resize: none;
+    max-height: 190px; min-height: 42px;
+  }
+  textarea:focus { outline: none; border-color: #39414f; }
+  .hint { font-size: 11px; color: var(--dim); margin-top: 7px; }
+
+  @media (max-width: 720px) {
+    body { flex-direction: column; }
+    aside { width: 100%; flex-direction: row; overflow-x: auto; border-right: none;
+            border-bottom: 1px solid var(--line); }
+    aside h1, aside .foot { display: none; }
+    .agent { border-left: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+    .agent.on { border-left: none; border-bottom-color: var(--accent); }
+    .agent .rl { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<aside>
+  <h1>Команда</h1>
+  <div id="agents"></div>
+  <div class="foot">Полные права: сотрудники правят файлы и запускают команды.</div>
+</aside>
+
+<main>
+  <header>
+    <span class="avwrap"><img class="av" id="hav" alt=""></span>
+    <div>
+      <div class="who" id="who">—</div>
+      <div class="sub" id="sub"></div>
+    </div>
+    <div class="sp"></div>
+    <span class="ctx" id="ctx"></span>
+    <button id="stop" class="danger" disabled>Стоп</button>
+    <button id="reset" title="Сотрудник забудет этот разговор и начнёт с чистого листа">
+      ⟳ Новый диалог
+    </button>
+  </header>
+
+  <div id="feed"></div>
+
+  <footer>
+    <div class="projects" id="projects"></div>
+    <div class="composer">
+      <textarea id="input" rows="1" placeholder="Спросить…"></textarea>
+      <button id="send">Отправить</button>
+    </div>
+    <div class="hint" id="hint">Enter — отправить, Shift+Enter — перенос строки.</div>
+  </footer>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let agents = [];      // список сотрудников с сервера
+let active = null;    // id выбранного
+let source = null;    // EventSource активного
+let seen = -1;        // последний показанный индекс события
+let turn = null;      // текущий блок ответа, если агент говорит
+let running = false;
+let ctxCount = 0;     // сколько вопросов накопил текущий тред
+
+/* Показываем размер контекста рядом с кнопкой: видно, когда сбрасывать. */
+function updateCtx() {
+  const n = ctxCount;
+  $("ctx").textContent = n
+    ? `в контексте ${n} ${n % 10 === 1 && n % 100 !== 11 ? "вопрос" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "вопроса" : "вопросов"}`
+    : "новый диалог";
+  $("reset").disabled = running || !n;
+}
+
+/* Markdown с обезвреженным HTML: экранируем до разбора, поэтому <script> из
+   прочитанного агентом файла останется текстом, а разметка всё равно работает. */
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+function md(text) {
+  if (window.marked) { try { return marked.parse(esc(text)); } catch (_) {} }
+  return "<div style='white-space:pre-wrap'>" + esc(text) + "</div>";
+}
+const fmtDur = (ms) => {
+  const s = Math.round(ms / 1000);
+  return s < 60 ? s + " с" : Math.floor(s / 60) + " мин " + String(s % 60).padStart(2, "0") + " с";
+};
+
+/* ── боковая панель ───────────────────────────────────── */
+async function loadAgents() {
+  agents = await (await fetch("/api/agents")).json();
+  $("agents").innerHTML = "";
+  for (const a of agents) {
+    const el = document.createElement("div");
+    el.className = "agent" + (a.id === active ? " on" : "");
+    el.innerHTML = `<span class="avwrap">
+        <img class="av" src="/avatars/${a.id}.jpg" alt="">
+        <span class="dot${a.running ? " run" : ""}"></span>
+      </span>
+      <span><span class="nm"></span><span class="rl"></span></span>`;
+    el.querySelector(".nm").textContent = a.name;
+    el.querySelector(".rl").textContent = a.role;
+    el.onclick = () => select(a.id);
+    $("agents").appendChild(el);
+  }
+  const cur = agents.find((a) => a.id === active);
+  if (cur) setRunning(cur.running);
+}
+setInterval(loadAgents, 3000);
+
+function setRunning(on) {
+  running = on;
+  $("stop").disabled = !on;
+  $("send").disabled = on;
+  $("input").placeholder = on ? "Отвечает…" : "Спросить…";
+  if (on) disarm();   // взведённый сброс не должен пережить начало ответа
+  updateCtx();
+}
+
+/* ── тумблеры проектов ────────────────────────────────── */
+/* Выбор свой у каждого сотрудника и переживает перезагрузку страницы. */
+const projKey = () => "crew.proj." + active;
+let chosen = new Set();
+
+function loadChosen() {
+  try { chosen = new Set(JSON.parse(localStorage.getItem(projKey()) || "[]")); }
+  catch (_) { chosen = new Set(); }
+}
+function saveChosen() {
+  localStorage.setItem(projKey(), JSON.stringify([...chosen]));
+}
+
+function renderProjects() {
+  const a = agents.find((x) => x.id === active);
+  const box = $("projects");
+  box.innerHTML = "";
+  const list = (a && a.projects) || [];
+  // Отмеченный, но исчезнувший проект (заметку переименовали) не держим.
+  const ids = new Set(list.map((p) => p.id));
+  for (const p of [...chosen]) if (!ids.has(p)) chosen.delete(p);
+
+  for (const p of list) {
+    const b = document.createElement("button");
+    b.className = "proj" + (chosen.has(p.id) ? " on" : "");
+    b.textContent = p.label;
+    b.title = p.label === p.id ? "Отметить, что речь об этом проекте" : p.id;
+    b.onclick = () => {
+      chosen.has(p.id) ? chosen.delete(p.id) : chosen.add(p.id);
+      saveChosen();
+      renderProjects();
+    };
+    box.appendChild(b);
+  }
+  if (chosen.size) {
+    const c = document.createElement("button");
+    c.className = "clear";
+    c.textContent = "сбросить";
+    c.onclick = () => { chosen.clear(); saveChosen(); renderProjects(); };
+    box.appendChild(c);
+  }
+}
+
+/* ── выбор сотрудника ─────────────────────────────────── */
+function select(id) {
+  if (source) { source.close(); source = null; }
+  active = id;
+  seen = -1;
+  turn = null;
+  ctxCount = 0;
+  disarm();
+  localStorage.setItem("crew.active", id);
+  const a = agents.find((x) => x.id === id);
+  $("who").textContent = a ? a.name : id;
+  $("sub").textContent = a ? a.role : "";
+  $("hav").src = `/avatars/${id}.jpg`;
+  $("feed").innerHTML = `<div class="empty">Диалог пуст.<br>Спросите ${a ? a.name : ""} о чём-нибудь.</div>`;
+  loadChosen();
+  renderProjects();
+  updateCtx();
+  loadAgents();
+  subscribe();
+}
+
+function subscribe() {
+  // from=seen+1: после рефреша страницы догоняем весь журнал, при обрыве связи
+  // браузер переподключается сам и присылает Last-Event-ID.
+  source = new EventSource(`/api/events/${active}?from=${seen + 1}`);
+  source.onmessage = (m) => apply(JSON.parse(m.data));
+}
+
+/* ── рендер журнала ───────────────────────────────────── */
+function feedEl() {
+  const f = $("feed");
+  if (f.querySelector(".empty")) f.innerHTML = "";
+  return f;
+}
+function atBottom() {
+  const f = $("feed");
+  return f.scrollHeight - f.scrollTop - f.clientHeight < 120;
+}
+function scroll(was) { if (was) $("feed").scrollTop = $("feed").scrollHeight; }
+
+function newTurn(name) {
+  const el = document.createElement("div");
+  el.className = "turn";
+  el.innerHTML = `<div class="who-line"><img class="av" src="/avatars/${active}.jpg" alt="">
+                  <span></span></div><div class="tools"></div>
+                  <div class="body cursor"></div><div class="meta"></div>`;
+  el.querySelector(".who-line span").textContent = name;
+  feedEl().appendChild(el);
+  return { el, text: "", body: el.querySelector(".body"), consults: [], group: null,
+           tools: el.querySelector(".tools"), meta: el.querySelector(".meta"), t0: Date.now() };
+}
+
+const FOLD_LINES = 3;
+
+/* Непрерывная серия вызовов инструментов — одна сворачиваемая группа.
+   Свёрнута всегда: пока агент работает, в трёх строках бежит хвост списка. */
+function newToolGroup(host) {
+  const box = document.createElement("div");
+  box.className = "toolbox";
+  box.innerHTML = `<div class="tlist fold"></div><span class="tmore"></span>`;
+  host.appendChild(box);
+
+  const g = { list: box.querySelector(".tlist"), more: box.querySelector(".tmore"), n: 0 };
+  g.more.onclick = () => {
+    const folded = g.list.classList.toggle("fold");
+    if (folded) g.list.scrollTop = g.list.scrollHeight;
+    sync(g);
+  };
+  sync(g);
+  return g;
+}
+
+function sync(g) {
+  const hidden = g.n - FOLD_LINES;
+  if (g.list.classList.contains("fold")) {
+    g.more.textContent = hidden > 0 ? `▸ показать все ${g.n}` : "";
+  } else {
+    g.more.textContent = "▾ свернуть";
+  }
+}
+
+/* Блок «сотрудник позвал соседа»: аватар вызванного, вопрос и его ответ.
+   Ответ сворачиваем — он часто длиннее, чем весь остальной разговор. */
+function consultBlock(who, question, cmd) {
+  const a = agents.find((x) => x.id === who);
+  const el = document.createElement("div");
+  el.className = "consult";
+  el.innerHTML = `<div class="chead">
+      <img class="av" src="/avatars/${who}.jpg" alt="">
+      <b></b><span class="tag">консультация</span>
+    </div>
+    <div class="clabel">вопрос</div>
+    <div class="cq"></div>
+    <div class="cwait">ждёт ответа</div>`;
+  el.querySelector("b").textContent = a ? a.name : who;
+  const q = el.querySelector(".cq");
+  if (question) {
+    q.textContent = question;
+  } else if (cmd) {
+    // Вопрос вытащить не вышло — показываем команду, а не пустоту.
+    q.classList.add("mono");
+    q.textContent = cmd;
+  } else {
+    q.textContent = "—";
+  }
+  return el;
+}
+
+/* Последний блок консультации этого соседа — в него и пишем. */
+function openConsult(who) {
+  return turn && [...turn.consults].reverse().find((c) => c.who === who);
+}
+
+const fmtSize = (n) =>
+  n < 1024 ? n + " Б" : n < 1024 * 1024 ? (n / 1024).toFixed(1) + " КБ"
+                                        : (n / 1048576).toFixed(1) + " МБ";
+
+function fillConsult(el, answer, failed) {
+  el.querySelector(".cwait")?.remove();
+  // Повторный ответ той же консультации заменяет прежний, а не дописывается.
+  el.querySelector(".ca")?.remove();
+  el.querySelector(".ctoggle")?.remove();
+  el.querySelector(".clabel.ans")?.remove();
+
+  const lab = document.createElement("div");
+  lab.className = "clabel ans";
+  lab.textContent = failed ? "ошибка" : "ответ";
+  el.appendChild(lab);
+  const body = document.createElement("div");
+  body.className = "ca folded";
+  if (failed) body.innerHTML = `<div class="err"></div>`, body.firstChild.textContent = answer;
+  else body.innerHTML = md(answer);
+  el.appendChild(body);
+
+  // Кнопку показываем, только если под сгибом действительно что-то есть.
+  requestAnimationFrame(() => {
+    if (body.scrollHeight - body.clientHeight < 8) { body.classList.remove("folded"); return; }
+    const btn = document.createElement("button");
+    btn.className = "ctoggle";
+    btn.textContent = "Развернуть ответ";
+    btn.onclick = () => {
+      const folded = body.classList.toggle("folded");
+      btn.textContent = folded ? "Развернуть ответ" : "Свернуть";
+    };
+    el.appendChild(btn);
+  });
+}
+
+function apply(ev) {
+  if (ev.i <= seen) return;
+  seen = ev.i;
+  const was = atBottom();
+  const a = agents.find((x) => x.id === active);
+  const name = a ? a.name : active;
+
+  switch (ev.t) {
+    case "user": {
+      const el = document.createElement("div");
+      el.className = "turn me";
+      el.innerHTML = `<div class="who-line">вы</div><div class="body"></div>`;
+      el.querySelector(".body").textContent = ev.text;
+      // Пометка о проектах идёт отдельной строкой: в пузыре остаётся то, что
+      // человек набрал, а не служебная приписка.
+      if (ev.projects && ev.projects.length) {
+        const tags = document.createElement("div");
+        tags.className = "ptags";
+        for (const p of ev.projects) {
+          const t = document.createElement("span");
+          t.className = "ptag";
+          t.textContent = p;
+          tags.appendChild(t);
+        }
+        el.appendChild(tags);
+      }
+      feedEl().appendChild(el);
+      ctxCount++;
+      updateCtx();
+      break;
+    }
+    case "start":
+      turn = newTurn(name);
+      turn.t0 = (ev.ts || Date.now() / 1000) * 1000;
+      tick();
+      setRunning(true);
+      break;
+    case "tool": {
+      if (!turn) turn = newTurn(name);
+      if (!turn.group) turn.group = newToolGroup(turn.tools);
+      const g = turn.group;
+      const t = document.createElement("div");
+      t.className = "tool";
+      t.innerHTML = "<b></b><i></i>";
+      t.querySelector("b").textContent = ev.name;
+      t.querySelector("i").textContent = ev.brief || "";
+      g.list.appendChild(t);
+      g.n++;
+      sync(g);
+      if (g.list.classList.contains("fold")) g.list.scrollTop = g.list.scrollHeight;
+      break;
+    }
+    case "consult": {
+      if (!turn) turn = newTurn(name);
+      // Консультация разрывает серию: она не должна прятаться под сгибом.
+      turn.group = null;
+      const el = consultBlock(ev.who, ev.question, ev.cmd);
+      turn.tools.appendChild(el);
+      turn.consults.push({ who: ev.who, el, answered: false });
+      break;
+    }
+    case "consult_bg": {
+      const slot = openConsult(ev.who);
+      const w = slot && slot.el.querySelector(".cwait");
+      if (w) w.textContent = "работает в фоне";
+      break;
+    }
+    case "consult_progress": {
+      // Пока файл вывода растёт — сосед жив. Это и есть признак «пусть работает».
+      const slot = openConsult(ev.who);
+      const w = slot && slot.el.querySelector(".cwait");
+      if (!w) break;
+      // Пустой файл при claude -p — норма: ответ придёт целиком в конце.
+      w.textContent = ev.size
+        ? `отвечает · ${fmtSize(ev.size)}`
+        : `работает в фоне · ${fmtDur(ev.waited * 1000)}`;
+      break;
+    }
+    case "consult_reply": {
+      const slot = openConsult(ev.who);
+      // Фоновую консультацию агент дочитывает в несколько заходов: каждый
+      // следующий ответ полнее предыдущего, поэтому заменяем, а не добавляем.
+      if (slot) { slot.answered = true; fillConsult(slot.el, ev.answer, ev.failed); }
+      break;
+    }
+    case "delta":
+      if (!turn) turn = newTurn(name);
+      turn.text += ev.text;
+      turn.body.innerHTML = md(turn.text);
+      turn.body.classList.add("cursor");
+      break;
+    case "done": {
+      if (!turn) break;
+      turn.body.classList.remove("cursor");
+      const bits = [];
+      if (ev.ms) bits.push(fmtDur(ev.ms));
+      if (ev.turns) bits.push(ev.turns + " ход" + (ev.turns > 4 ? "ов" : ev.turns > 1 ? "а" : ""));
+      if (ev.cost) {
+        // На подписке total_cost_usd — пересчёт токенов по тарифам API, а не
+        // списание. Показываем со знаком «примерно» и объясняем в подсказке.
+        bits.push((ev.billed ? "$" : "≈$") + ev.cost.toFixed(2));
+        turn.meta.title = ev.billed
+          ? "Списано по API-тарифу"
+          : "Вход по подписке: деньги не списываются, это эквивалент по тарифам API — "
+            + "мера тяжести запроса. Расходуется лимит плана.";
+      }
+      turn.meta.textContent = bits.join(" · ");
+      turn = null;
+      setRunning(false);
+      break;
+    }
+    case "error": {
+      const host = turn || newTurn(name);
+      host.body.classList.remove("cursor");
+      const e = document.createElement("div");
+      e.className = "err";
+      e.textContent = ev.text;
+      host.el.appendChild(e);
+      turn = null;
+      setRunning(false);
+      break;
+    }
+    case "stopped":
+      if (turn) {
+        turn.body.classList.remove("cursor");
+        turn.meta.textContent = "остановлено" + (ev.note ? " — " + ev.note : "");
+        turn = null;
+      }
+      setRunning(false);
+      break;
+    case "reset": {
+      const a2 = agents.find((x) => x.id === active);
+      $("feed").innerHTML =
+        `<div class="empty">Новый диалог.<br>${a2 ? a2.name : ""} забыл${
+          a2 && a2.she ? "а" : ""} прошлый разговор.</div>`;
+      turn = null;
+      ctxCount = 0;
+      updateCtx();
+      break;
+    }
+    // "session" — служебное, показывать нечего
+  }
+  scroll(was);
+}
+
+/* Пока агент думает, в meta тикает время. Считается от ts из журнала, поэтому
+   остаётся верным и после рефреша страницы посреди запуска. */
+function tick() {
+  if (!turn) return;
+  turn.meta.textContent = fmtDur(Date.now() - turn.t0);
+  setTimeout(tick, 1000);
+}
+
+/* ── отправка ─────────────────────────────────────────── */
+async function send() {
+  const text = $("input").value.trim();
+  if (!text || running) return;
+  $("input").value = "";
+  $("input").style.height = "auto";
+  const r = await fetch("/api/send", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent: active, text, projects: [...chosen] }),
+  });
+  if (!r.ok) {
+    const { error } = await r.json().catch(() => ({ error: "не отправилось" }));
+    $("hint").textContent = error;
+    setTimeout(() => ($("hint").textContent = "Enter — отправить, Shift+Enter — перенос строки."), 4000);
+  }
+}
+
+$("send").onclick = send;
+$("stop").onclick = () =>
+  fetch("/api/stop", { method: "POST", headers: { "Content-Type": "application/json" },
+                       body: JSON.stringify({ agent: active }) });
+/* Сброс в два шага прямо в кнопке: первый клик взводит, второй сбрасывает.
+   Модалку не зовём — confirm() блокируется частью браузеров и выглядит чужеродно. */
+let armed = null;
+function disarm() {
+  clearTimeout(armed); armed = null;
+  $("reset").classList.remove("arm");
+  $("reset").textContent = "⟳ Новый диалог";
+}
+$("reset").onclick = async () => {
+  if (!armed) {
+    if (!ctxCount) return;           // сбрасывать нечего — молчим
+    $("reset").classList.add("arm");
+    $("reset").textContent = "Точно? Контекст сотрётся";
+    armed = setTimeout(disarm, 5000);
+    return;
+  }
+  disarm();
+  await fetch("/api/reset", { method: "POST", headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ agent: active }) });
+  select(active);
+};
+$("input").onkeydown = (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+};
+$("input").oninput = function () {
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 190) + "px";
+};
+
+(async () => {
+  await loadAgents();
+  select(localStorage.getItem("crew.active") || agents[0].id);
+  $("input").focus();
+})();
+</script>
+</body>
+</html>

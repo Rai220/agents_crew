@@ -1,0 +1,29 @@
+# Логи харнессов
+.free-code-logs/
+.claude/
+.codex/
+.deepagents/
+.kimi/
+
+# История чатов консоли — это переписка, ей не место в репозитории
+console/data/
+
+# Секреты
+.env
+.env.*
+*.key
+*.pem
+*.crt
+credentials*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# OS
+.DS_Store

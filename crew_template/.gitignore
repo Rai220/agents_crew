@@ -1,0 +1,46 @@
+# Логи харнессов
+.free-code-logs/
+.claude/
+.codex/
+.deepagents/
+.kimi/
+_cc_logs/
+
+# Секреты
+.env
+.env.*
+*.key
+*.pem
+*.crt
+credentials*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.ipynb_checkpoints/
+dist/
+build/
+*.egg-info/
+
+# OS
+.DS_Store
+
+# --- Раскомментируй, если сотрудник работает с данными и моделями ---
+# data/
+# datasets/
+# artifacts/
+# checkpoints/
+# runs/
+# wandb/
+# mlruns/
+# *.csv
+# *.parquet
+# *.ckpt
+# *.pt
+# *.safetensors
