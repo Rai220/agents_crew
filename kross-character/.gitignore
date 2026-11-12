@@ -1,0 +1,17 @@
+# Local/private state
+.env
+.env.*
+!.env.example
+vault/
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+*.log
+__pycache__/
+.DS_Store
+.venv/
+artifacts/
+data/
+checkpoints/
